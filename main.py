@@ -5,7 +5,7 @@ import discord
 from discord import Intents, Client, Embed
 from responses import tarnishedLists
 from discord import app_commands
-from enum import Enum
+from enum import IntEnum
 import re
 
 # Load token from somewhere safe
@@ -13,7 +13,7 @@ load_dotenv()
 TOKEN: Final[str] = os.getenv('DISCORD_TOKEN')
 GUILD = None
 
-class WordType(Enum):
+class WordType(IntEnum):
     Template = 0
     Category = 1
     Word = 2
@@ -32,15 +32,18 @@ def constructOptionsList(sourceList:list[str], default: str) -> list[discord.Sel
                                      ) for item in sourceList]    
 
 class DropdownSelect(discord.ui.Select):
-    def __init__(self, droptype: WordType, chunk: bool):
-        super().__init__(row=3)
-        self.view: Menu =  self.view
-        self.update(droptype, chunk)
+    def __init__(self, droptype: WordType, chunk: bool, message):
+        self.chunk = chunk
+        self.droptype: WordType = droptype
+        super().__init__(row=3,
+                         options = constructOptionsList(
+                                getwordList(self.droptype, message[WordType.Category][self.chunk]), 
+                                message[self.droptype][self.chunk]))
     
     def update(self, droptype: WordType, chunk: bool):
         self.chunk = chunk
         self.droptype: WordType = droptype
-        self.updateOptions
+        self.updateOptions()
         self.disabled = chunk and self.view.chunk2disabled
     
     def updateOptions(self)-> None:
@@ -55,7 +58,7 @@ class DropdownSelect(discord.ui.Select):
         mybutton.label = f"{self.droptype.name}: {self.view.message[self.droptype][self.chunk]}"
         self.updateOptions()
         if self.droptype == WordType.Category:
-            self.view.message[WordType.Word][self.chunk] = tarnishedLists[WordType.Word][self.view.message[WordType.Category][self.chunk]][0]
+            self.view.message[WordType.Word.value][self.chunk] = tarnishedLists[WordType.Word.value][self.view.message[WordType.Category][self.chunk]][0]
             wordbutton: discord.ui.Button = self.view.buttons[WordType.Word][self.chunk]
             wordbutton.label = f"{WordType.Word.name}: {self.view.message[WordType.Word][self.chunk]}"
             self.view.updateButton(wordbutton)
@@ -67,12 +70,11 @@ class DropdownSelect(discord.ui.Select):
         await interaction.response.edit_message(embed=self.view.getEmbed(),view=self.view)
 
 class switchButton(discord.ui.Button):
-    def __init__(self, buttonType: WordType, chunk: bool):
+    def __init__(self, buttonType: WordType, chunk: bool, message):
         super().__init__(style=discord.ButtonStyle.blurple)
         self.buttonType: WordType = buttonType
         self.chunk: bool = chunk
-        self.view: Menu = self.view
-        self.label=f"{buttonType.name}: {getwordList(buttonType,self.view.message[WordType.Category][self.chunk])}"
+        self.label=f"{buttonType.name}: {message[self.buttonType][self.chunk]}"
         self.row = 2 if self.chunk else int(self.buttonType == WordType.Conjunction)
         self.disabled=chunk
         
@@ -87,14 +89,14 @@ class Menu(discord.ui.View):
         self.message = [
             [tarnishedLists[WordType.Template][0],tarnishedLists[WordType.Template][0]],
             [tarnishedLists[WordType.Category][0],tarnishedLists[WordType.Category][0]],
-            [tarnishedLists[WordType.Word][0],tarnishedLists[WordType.Word][0]],
+            [tarnishedLists[WordType.Word][tarnishedLists[WordType.Category][0]][0],tarnishedLists[WordType.Word][tarnishedLists[WordType.Category][0]][0]],
             [tarnishedLists[WordType.Conjunction][0]]
         ]
         self.buttons:list[list[switchButton]] = [
-            [switchButton(WordType.Template,False),switchButton(WordType.Template,True)],
-            [switchButton(WordType.Category, False),switchButton(WordType.Category, True)],
-            [switchButton(WordType.Word, False),switchButton(WordType.Word, True)],
-            [switchButton(WordType.Conjunction,False)]
+            [switchButton(WordType.Template,False, self.message),switchButton(WordType.Template,True, self.message)],
+            [switchButton(WordType.Category, False, self.message),switchButton(WordType.Category, True, self.message)],
+            [switchButton(WordType.Word, False, self.message),switchButton(WordType.Word, True, self.message)],
+            [switchButton(WordType.Conjunction,False, self.message)]
         ]
         self.username: str = user
         self.chunk2disabled: bool = True
@@ -102,7 +104,7 @@ class Menu(discord.ui.View):
             for wtype in range (3):
                 self.add_item(self.buttons[wtype][chunk])
             if not chunk: self.add_item(self.buttons[WordType.Conjunction][0])
-        self.dropdown: DropdownSelect = DropdownSelect(WordType.Template, False)
+        self.dropdown: DropdownSelect = DropdownSelect(WordType.Template, False, self.message)
         self.add_item(self.dropdown)
         self.currbutton: discord.ui.Button = self.buttons[WordType.Template][0]
         self.currbutton.disabled = True
