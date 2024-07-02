@@ -3,120 +3,123 @@ import os
 from dotenv import load_dotenv
 import discord
 from discord import Intents, Client, Embed
-from responses import TarnishedTalk
+from responses import tarnishedLists
 from discord import app_commands
+from enum import Enum
+import re
 
 # Load token from somewhere safe
 load_dotenv()
 TOKEN: Final[str] = os.getenv('DISCORD_TOKEN')
-GUILD = None #: discord.Object = discord.Object(id=445778700051415040)
+GUILD = None
 
-
+class WordType(Enum):
+    Template = 0
+    Category = 1
+    Word = 2
+    Conjunction = 3
+    
+def getwordList(listType: WordType, key = None): return tarnishedLists[listType][key] if listType == WordType.Word else tarnishedLists[listType]
+        
 # Bot Setup
 intents: Intents = Intents.default()
 client: Client = Client(intents=intents)
 tree: app_commands.CommandTree = app_commands.CommandTree(client)
 
-def constructOptionsList(sourceList, default: str | int | None = None ) -> list[discord.SelectOption]:
-        if default == 0: default = sourceList[0]
+def constructOptionsList(sourceList:list[str], default: str) -> list[discord.SelectOption]:
         return [discord.SelectOption(label = item, 
                                      default = item==default
                                      ) for item in sourceList]    
 
 class DropdownSelect(discord.ui.Select):
-    def __init__(self, sourceList, droptype: int, default: str | int | None = None, disabled = False):
-        self.droptype = droptype
-        if default == 0: default = sourceList[0]
-        options =  [discord.SelectOption(label = item, 
-                                     default = item==default
-                                     ) for item in sourceList]
-        super().__init__(options=options, row=3)
-        self.disabled = disabled
+    def __init__(self, droptype: WordType, chunk: bool):
+        super().__init__(row=3)
+        self.view: Menu =  self.view
+        self.update(droptype, chunk)
     
-    def update(self, sourceList, droptype: int, default: str | int | None = None, disabled = False):
-        self.droptype = droptype
-        if default == 0: default = sourceList[0]
-        self.options =  [discord.SelectOption(label = item, 
-                                     default = item==default
-                                     ) for item in sourceList]
-        self.disabled = disabled
+    def update(self, droptype: WordType, chunk: bool):
+        self.chunk = chunk
+        self.droptype: WordType = droptype
+        self.updateOptions
+        self.disabled = chunk and self.view.chunk2disabled
+    
+    def updateOptions(self)-> None:
+        self.options = constructOptionsList(
+            getwordList(self.droptype, self.view.message[WordType.Category][self.chunk]), 
+            self.view.message[self.droptype][self.chunk])
+        
     
     async def callback(self, interaction: discord.Interaction):
-        myview: Menu = self.view
+        self.view.message[self.droptype][self.chunk] = self.values[0]
+        mybutton: discord.ui.Button = self.view.buttons[self.droptype][self.chunk]
+        mybutton.label = f"{self.droptype.name}: {self.view.message[self.droptype][self.chunk]}"
+        self.updateOptions()
+        if self.droptype == WordType.Category:
+            self.view.message[WordType.Word][self.chunk] = tarnishedLists[WordType.Word][self.view.message[WordType.Category][self.chunk]][0]
+            wordbutton: discord.ui.Button = self.view.buttons[WordType.Word][self.chunk]
+            wordbutton.label = f"{WordType.Word.name}: {self.view.message[WordType.Word][self.chunk]}"
+            self.view.updateButton(wordbutton)
+            self.view.dropdown.update(WordType.Word,self.chunk)
+        elif self.droptype == WordType.Conjunction:
+            self.view.chunk2disabled = self.view.message[WordType.Conjunction][0] == tarnishedLists[WordType.Conjunction][0]
+            for button in self.view.buttons[0:3]:
+                button[1].disabled = self.view.chunk2disabled
+        await interaction.response.edit_message(embed=self.view.getEmbed(),view=self.view)
+
+class switchButton(discord.ui.Button):
+    def __init__(self, buttonType: WordType, chunk: bool):
+        super().__init__(style=discord.ButtonStyle.blurple)
+        self.buttonType: WordType = buttonType
+        self.chunk: bool = chunk
+        self.view: Menu = self.view
+        self.label=f"{buttonType.name}: {getwordList(buttonType,self.view.message[WordType.Category][self.chunk])}"
+        self.row = 2 if self.chunk else int(self.buttonType == WordType.Conjunction)
+        self.disabled=chunk
         
-        match self.droptype:
-            case 0:
-                myview.tarnished.templateFirst = self.values[0]
-                mybutton: discord.ui.Button = myview.children[self.droptype]
-                mybutton.label = f"Template: {myview.tarnished.templateFirst}"
-                self.options= constructOptionsList(TarnishedTalk.templateList,default=myview.tarnished.templateFirst)
-            case 1:
-                if myview.tarnished.categoryFirst != self.values[0]:
-                    myview.tarnished.categoryFirst = self.values[0]
-                    mybutton: discord.ui.Button = myview.children[self.droptype]
-                    mybutton.label = f"Category: {myview.tarnished.categoryFirst}"
-                    self.options = constructOptionsList(TarnishedTalk.categoryList,default=myview.tarnished.categoryFirst)
-
-                    myview.tarnished.wordFirst = TarnishedTalk.wordsList[myview.tarnished.categoryFirst][0]
-                    wordbutton: discord.ui.Button = myview.children[self.droptype+1]
-                    wordbutton.label = f"Word: {myview.tarnished.wordFirst}"
-            case 2:
-                myview.tarnished.wordFirst = self.values[0]
-                mybutton: discord.ui.Button = myview.children[self.droptype]
-                mybutton.label = f"Word: {myview.tarnished.wordFirst}"
-                self.options = constructOptionsList(TarnishedTalk.wordsList[myview.tarnished.categoryFirst], default=myview.tarnished.wordFirst)
-            case 3:
-                myview.tarnished.conjunction = self.values[0]
-                mybutton: discord.ui.Button = myview.children[self.droptype]
-                mybutton.label = f"Conjunction: {myview.tarnished.conjunction}"
-                for child in myview.children[4:7]:
-                    child.disabled = myview.tarnished.conjunction == TarnishedTalk.conjunctionList[0]
-                self.options = constructOptionsList(TarnishedTalk.conjunctionList, default=myview.tarnished.conjunction)
-            case 4:
-                myview.tarnished.templateSecond = self.values[0]
-                mybutton: discord.ui.Button = myview.children[self.droptype]
-                mybutton.label = f"Template: {myview.tarnished.templateSecond}"
-                self.options= constructOptionsList(TarnishedTalk.templateList,default=myview.tarnished.templateSecond)
-            case 5:
-                if myview.tarnished.categorySecond != self.values[0]:
-                    myview.tarnished.categorySecond = self.values[0]
-                    mybutton: discord.ui.Button = myview.children[self.droptype]
-                    mybutton.label = f"Category: {myview.tarnished.categorySecond}"
-                    self.options = constructOptionsList(TarnishedTalk.categoryList,default=myview.tarnished.categorySecond)
-
-                    myview.tarnished.wordSecond = TarnishedTalk.wordsList[myview.tarnished.categorySecond][0]
-                    wordbutton: discord.ui.Button = myview.children[self.droptype+1]
-                    wordbutton.label = f"Word: {myview.tarnished.wordSecond}"
-            case 6:
-                myview.tarnished.wordSecond = self.values[0]
-                self.options = constructOptionsList(TarnishedTalk.wordsList[myview.tarnished.categorySecond], default=myview.tarnished.wordSecond)
-                mybutton: discord.ui.Button = myview.children[self.droptype]
-                mybutton.label = f"Word: {myview.tarnished.wordSecond}"
-        await interaction.response.edit_message(embed=myview.getEmbed(),view=myview)
-
+    async def callback(self, interaction: discord.Interaction):
+        self.view.updateButton(self)
+        self.view.dropdown.update(self.buttonType,self.chunk)
+        await interaction.response.edit_message(embed=self.view.getEmbed(),view=self.view)
+    
 class Menu(discord.ui.View):
-    # Dropdown setup
-    dropdown: DropdownSelect = None
-    currbutton: discord.ui.Button
-    templateOptionsList: list[discord.SelectOption] = constructOptionsList(TarnishedTalk.templateList, default=0)
-    categoryOptionsList: list[discord.SelectOption] = constructOptionsList(TarnishedTalk.categoryList, default=0)
-    conjunctionOptionsList: list[discord.SelectOption] = constructOptionsList(TarnishedTalk.conjunctionList)
-    
-    def getSubcategoryOptionsList(self, key: str) -> list[discord.SelectOption]:
-        return [discord.SelectOption(label=templ, default=templ == self.tarnished.wordFirst) for templ in TarnishedTalk.getWordSublist(key)]
-    
     def __init__(self, user: str):
         super().__init__()
-        self.tarnished: TarnishedTalk = TarnishedTalk()
+        self.message = [
+            [tarnishedLists[WordType.Template][0],tarnishedLists[WordType.Template][0]],
+            [tarnishedLists[WordType.Category][0],tarnishedLists[WordType.Category][0]],
+            [tarnishedLists[WordType.Word][0],tarnishedLists[WordType.Word][0]],
+            [tarnishedLists[WordType.Conjunction][0]]
+        ]
+        self.buttons:list[list[switchButton]] = [
+            [switchButton(WordType.Template,False),switchButton(WordType.Template,True)],
+            [switchButton(WordType.Category, False),switchButton(WordType.Category, True)],
+            [switchButton(WordType.Word, False),switchButton(WordType.Word, True)],
+            [switchButton(WordType.Conjunction,False)]
+        ]
         self.username: str = user
-        self.dropdown = DropdownSelect(TarnishedTalk.templateList,0,self.tarnished.templateFirst)
+        self.chunk2disabled: bool = True
+        for chunk in range(2):
+            for wtype in range (3):
+                self.add_item(self.buttons[wtype][chunk])
+            if not chunk: self.add_item(self.buttons[WordType.Conjunction][0])
+        self.dropdown: DropdownSelect = DropdownSelect(WordType.Template, False)
         self.add_item(self.dropdown)
-        self.currbutton = self.children[0]
-        for child in self.children[4:7]:
-            child.disabled = True
+        self.currbutton: discord.ui.Button = self.buttons[WordType.Template][0]
         self.currbutton.disabled = True
+        self.currbutton.style = discord.ButtonStyle.gray
+        
+    def getChunk(self, chunk=False) -> str: return re.sub("____", self.message[WordType.Word][chunk],self.message[WordType.Template][chunk])
     
-    def getEmbed(self) -> Embed: return Embed(title="Message Preview",description = f"> {self.tarnished.getMessage()}\n \\- {self.username}")
+    def getMessage(self, user) -> str:
+        firstHalf = self.getChunk()
+        message = firstHalf
+        if self.message[WordType.Conjunction][0] != tarnishedLists[WordType.Conjunction][0]:
+            secondHalf = f"{self.message[WordType.Conjunction][0]} {self.getChunk(True)}"
+            message += secondHalf if self.message[WordType.Conjunction][0] == "," else f" {secondHalf}"
+        return f"> {message}\n \\- {user}"
+    
+    def getEmbed(self) -> Embed: return Embed(title="Message Preview",description = self.getMessage(self.username))
+    
     def updateButton(self, button: discord.ui.Button) -> None:
         self.currbutton.style = discord.ButtonStyle.blurple
         self.currbutton.disabled = False
@@ -125,59 +128,9 @@ class Menu(discord.ui.View):
         button.disabled = True
         self.currbutton = button
         
-    
-    # First Template
-    @discord.ui.button(label=f"Template: {TarnishedTalk.templateList[0]}", style=discord.ButtonStyle.gray, row=0)
-    async def selectTemplateFirst(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.updateButton(button)
-        self.dropdown.update(TarnishedTalk.templateList,0,self.tarnished.templateFirst)
-        await interaction.response.edit_message(embed=self.getEmbed(),view=self)
-            
-    # First Category
-    @discord.ui.button(label=f"Category: {TarnishedTalk.categoryList[0]}", style=discord.ButtonStyle.blurple, row=0)
-    async def selectCategoryFirst(self, interaction: discord.Interaction, button: discord.ui.Button): 
-        self.updateButton(button)
-        self.dropdown.update(TarnishedTalk.categoryList,1,self.tarnished.categoryFirst)
-        await interaction.response.edit_message(embed=self.getEmbed(),view=self)
-    
-    # First Word
-    @discord.ui.button(label=f"Word: {TarnishedTalk.wordsList[TarnishedTalk.categoryList[0]][0]}", style=discord.ButtonStyle.blurple, row=0)
-    async def selectWordFirst(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.updateButton(button)
-        self.dropdown.update(TarnishedTalk.wordsList[self.tarnished.categoryFirst],2,self.tarnished.wordFirst)
-        await interaction.response.edit_message(embed=self.getEmbed(),view=self)
- 
-    # Conjunction    
-    @discord.ui.button(label=f"Conjunction: {TarnishedTalk.conjunctionList[0]}", style=discord.ButtonStyle.blurple, row=1)
-    async def selectConjunction(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.updateButton(button)
-        self.dropdown.update(TarnishedTalk.conjunctionList,3,self.tarnished.conjunction)
-        await interaction.response.edit_message(embed=self.getEmbed(),view=self)
-
-    # Second Template
-    @discord.ui.button(label=f"Template: {TarnishedTalk.templateList[0]}", style=discord.ButtonStyle.blurple, row=2)
-    async def selectTemplateSecond(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.updateButton(button)
-        self.dropdown.update(TarnishedTalk.templateList,4,self.tarnished.templateSecond, disabled= self.tarnished.conjunction == TarnishedTalk.conjunctionList[0])
-        await interaction.response.edit_message(embed=self.getEmbed(),view=self)
-            
-    # Second Category
-    @discord.ui.button(label=f"Category: {TarnishedTalk.categoryList[0]}", style=discord.ButtonStyle.blurple, row=2)
-    async def selectCategorySecond(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.updateButton(button)
-        self.dropdown.update(TarnishedTalk.categoryList,5,self.tarnished.categorySecond, disabled= self.tarnished.conjunction == TarnishedTalk.conjunctionList[0])
-        await interaction.response.edit_message(embed=self.getEmbed(),view=self)
-    
-    # Second Word
-    @discord.ui.button(label=f"Word: {TarnishedTalk.wordsList[TarnishedTalk.categoryList[0]][0]}", style=discord.ButtonStyle.blurple, row=2)
-    async def selectWordSecond(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.updateButton(button)
-        self.dropdown.update(TarnishedTalk.wordsList[self.tarnished.categorySecond],6,self.tarnished.wordSecond, disabled= self.tarnished.conjunction == TarnishedTalk.conjunctionList[0])
-        await interaction.response.edit_message(embed=self.getEmbed(),view=self)
-
     @discord.ui.button(label="Send Message", style=discord.ButtonStyle.green, row=4)
     async def send_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(f"> {self.tarnished.getMessage()}\n \\- {self.username}")
+        await interaction.response.send_message(self.getMessage(self.username))
         await interaction.followup.delete_message(interaction.message.id)
         self.stop()
 
