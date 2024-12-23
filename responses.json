@@ -1,4 +1,4 @@
-tarnishedLists = [
+[
     [
             "____ ahead",
             "no ____ ahead",
@@ -74,7 +74,7 @@ tarnishedLists = [
                 "demi-human",
                 "outsider",
                 "giant",
-                "horse",
+                "horse"
             ],
             "Enemies 2" : [  
                 "dog",
@@ -113,7 +113,7 @@ tarnishedLists = [
                 "old codger",
                 "angel",
                 "fat coinpurse",
-                "pauper",
+                "pauper"
             ],
             "People 2" : [
                 "good sort",
@@ -127,7 +127,7 @@ tarnishedLists = [
                 "laggardly sort",
                 "invisible sort",
                 "unfathomable sort",
-                "giant sort",
+                "giant sort"
             ],
             "People 3" : [
                 "sinner",
@@ -143,7 +143,7 @@ tarnishedLists = [
                 "champion",
                 "monarch",
                 "lord",
-                "god",
+                "god"
             ],
             "Things 1" : [
                 "item",
@@ -167,7 +167,7 @@ tarnishedLists = [
                 "map",
                 "material",
                 "flower",
-                "grass",
+                "grass"
             ],
             "Things 2" : [
                 "tree",
@@ -257,7 +257,7 @@ tarnishedLists = [
                 "battle",
                 "reinforcements",
                 "ritual",
-                "explosion",
+                "explosion"
             ],
             "Situations 2" : [
                 "high spot",
@@ -294,7 +294,7 @@ tarnishedLists = [
                 "camp site",
                 "house",
                 "cemetary",
-                "underground tomb",
+                "underground tomb"
             ],
             "Places 2" : [
                 "tunnel",
@@ -379,7 +379,7 @@ tarnishedLists = [
                 "hope",
                 "despair",
                 "victory",
-                "defeat",
+                "defeat"
             ],
             "Concepts 2" : [
                 "research",
@@ -398,7 +398,7 @@ tarnishedLists = [
                 "fortitude",
                 "confidence",
                 "distracted",
-                "unguarded",
+                "unguarded"
             ],
             "Concepts 3" : [
                 "introspection",
@@ -443,7 +443,7 @@ tarnishedLists = [
                 "keep moving",
                 "turn back",
                 "give up",
-                "don't give up",
+                "don't give up"
             ],
             "Phrases 2" : [
                 "help me...",
@@ -455,7 +455,7 @@ tarnishedLists = [
                 "beautiful...",
                 "you don't have the right",
                 "are you ready?"
-            ],
+            ]
         },
     [
             "None",
@@ -469,5 +469,5 @@ tarnishedLists = [
             "so to speak",
             "all the more",
             ","
-        ],
+        ]
 ]

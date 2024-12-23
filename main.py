@@ -3,15 +3,24 @@ import os
 from dotenv import load_dotenv
 import discord
 from discord import Intents, Client, Embed
-from responses import tarnishedLists
 from discord import app_commands
 from enum import IntEnum
 import re
+import json
 
 # Load token from somewhere safe
 load_dotenv()
 TOKEN: Final[str] = os.getenv('DISCORD_TOKEN')
 GUILD = None
+
+# Load actual text data from json file into a dictionary
+# format: [
+#   List[Templates]
+#   List[Categories]
+#   Dict{Categories:List[Words]}
+#   List[Conjunctions]
+# ]
+tarnishedLists = json.load('./responses.json')
 
 class WordType(IntEnum):
     Template = 0
